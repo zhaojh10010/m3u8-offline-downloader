@@ -1,0 +1,6 @@
+.htaccess
+.user*
+*.log
+node_modules/
+.gitignore
+video/
