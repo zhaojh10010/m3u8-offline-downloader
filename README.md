@@ -2,11 +2,12 @@
 A simple backend for offline m3u8 links downloading using nodejs.
 
 ### How to use
-This project needs to install ffmpeg docker image, so firstly you need to install docker and execute
+This project needs to install ffmpeg docker image, so firstly you need to install docker and start docker process, and then execute
 ```
 docker pull jrottenberg/ffmpeg
 ```
-And this docker image is based on Ubuntu 16.
+This docker image is based on Ubuntu 16.
+
 You can use 
 ```
 docker run -it --name myffmpeg -p 8088:8088 --entrypoint='bash' jrottenberg/ffmpeg
@@ -16,7 +17,9 @@ to run a docker container named `myffmpeg`, and after you run this command, you 
 docker run myffmpeg
 ```
 to run the container.
-Notify that this project uses /home/ffmpeg as the log path, you can modify it in `app.js` as you wish.
+
+Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
+
 After you resovled the environment, just run
 ```
 npm start
