@@ -5,6 +5,8 @@ var port = 8088;
 const HTTP_OK = 200;
 const SYMBOL_OVERWRITE = ">";
 const SYMBOL_APPEND = ">>";
+const BASE_PATH = "/home/ffmpeg/"
+const VIDEO_PATH = BASE_PATH+"video/"
 
 http.createServer(function(req,res) {
     log("============"+new Date()+"============")
@@ -57,35 +59,35 @@ function m3u8tomp4(url,filename,res) {
             res.end(JSON.stringify({filename:filename+".log"}));//防阻塞
         }).on("error",error => {
             reject(log(error));
-            var cmd = "rm -rf /home/ffmpeg/video/"+filename+".mp4";//出错后删除未下载完毕的视频文件
+            var cmd = "rm -rf "+VIDEO_PATH+filename+".mp4";//出错后删除未下载完毕的视频文件
             execCmd(cmd);
         }).on("progress",function(progress) {
             if(progress && progress.percent)
                 log((i++)+"-"+(progress.percent).toFixed(2)+"%",filename,SYMBOL_OVERWRITE);
             // res.send("<p>Downloading: "+(progress.percent).toFixed(2)+"%</p>");
         }).on("end",()=>{
-            log("100.00%",filename,SYMBOL_OVERWRITE);
-            var cmd = "chown -R 1000:1000 /home/ffmpeg/video";//修改为docker外部的www用户权限
+            log(i+"-100.00%",filename,SYMBOL_OVERWRITE);
+            var cmd = "chown -R 1000:1000 "+VIDEO_PATH;//修改为docker外部的www用户权限
             execCmd(cmd);
             resolve();
         }).outputOptions("-c copy")//合并m3u8视频
         .outputOptions("-bsf:a aac_adtstoasc")//将视频转换为mp4
-        .output("./video/"+filename+".mp4")
+        .output(VIDEO_PATH+filename+".mp4")
         .run();
     });
 }
 
 function log(msg,filename,symbol=SYMBOL_APPEND) {
-    var cmd = "echo \'"+msg+"\'" + " "+symbol+" ./video/"+filename+".log";
+    var cmd = "echo \'"+msg+"\' "+symbol+" "+VIDEO_PATH+filename+".log";
     if(filename==undefined||filename==null||filename=="") {
-        cmd = "echo \'"+msg+"\'" + " "+symbol+" server.log";
+        cmd = "echo \'"+msg+"\' "+symbol+" "+BASE_PATH+"server.log";
         console.log(msg);
     }
     execCmd(cmd);
 }
 
 function createLogFile(filename) {
-    var cmd = "touch ./video/"+filename+".log;chown 1000:1000 ./video/"+filename+".log";//修改为docker外部的www用户权限
+    var cmd = "touch "+VIDEO_PATH+filename+".log;chown 1000:1000 "+VIDEO_PATH+filename+".log";//修改为docker外部的www用户权限
     execCmd(cmd);
 }
 
