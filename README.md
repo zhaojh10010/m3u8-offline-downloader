@@ -30,4 +30,4 @@ and the project should be running.
 ### Other information
 - Everything is defined in app.js, just use it.
 - The default port is 8088, the log file is `server.log`
-- And this project offers two shell scripts to start (in background) and stop nodejs server
+- This project offers two shell scripts to start (in background) and stop nodejs server
