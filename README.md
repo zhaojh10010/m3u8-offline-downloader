@@ -20,7 +20,7 @@ to run the container.
 
 Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
 
-After you resovled the environment, just run
+After you sovled the environment, just run
 ```
 npm start
 or
