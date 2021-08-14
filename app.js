@@ -1,7 +1,7 @@
-var http = require("http");
-var ffmpeg = require('fluent-ffmpeg');
-var exec = require('child_process').exec;
-var port = 8088;
+const http = require("http");
+const ffmpeg = require('fluent-ffmpeg');
+const exec = require('child_process').exec;
+const PORT = 8088;
 const HTTP_OK = 200;
 const SYMBOL_OVERWRITE = ">";
 const SYMBOL_APPEND = ">>";
@@ -47,8 +47,8 @@ http.createServer(function(req,res) {
     //生成缩略图
     
     // res.end();
-}).listen(port);
-log('Server start at port '+port);
+}).listen(PORT);
+log('Server start at PORT '+PORT);
 
 function m3u8tomp4(url,filename,res) {
     return new Promise((resolve, reject) => {
