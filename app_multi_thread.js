@@ -1,5 +1,4 @@
-http = require("http");
-https = require("https");
+const { http, https } = require('follow-redirects');
 const ffmpeg = require('fluent-ffmpeg');
 const exec = require('child_process').exec;
 const fs = require("fs");
@@ -23,10 +22,10 @@ http.createServer(function(req,res) {
         'Content-Type':'text/html;charset=utf-8',//解决中文乱码
         'Access-Content-Allow-Origin':'*'//解决跨域
     });
-    log(req.headers)
+    // log(req.headers)
 
     //### 临时处理
-    if(req.headers)
+    // if(req.headers)
 
 
     //###
@@ -68,33 +67,31 @@ log('Server start at port '+PORT);
 
 function downloadM3U8(url,filename) {
     return new Promise((resolve,reject) => {
-        let tmp = '';//存储ts列表
-        let parsedURL = new URL(url);
+        let chunks = [];//存储ts列表
+        console.log("======url=====",url)
+        let parsedUrl = new URL(url);
         let options = {
-            // url: url,
-            // hostname: 'www.hkg.haokan333.com',
-            // port: 443,
-            // path: '/201903/07/qM3F7ntN/800kb/hls',
-            method: 'get',
-            strictSSL: false,
-            // timeout: 1500,
-            headers: {
-                'Content-Type':'application/x-www-form-urlencoded',
-                'DNT': 1,
-                'Upgrade-Insecure-Requests': 1,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
+            'hostname': parsedUrl.hostname,
+            'path': parsedUrl.pathname,
+            'method': 'GET',
+            'headers': {
+                'Accept': '*/*',
+                'Host' : 'www.justforstudy.site',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Connection':'keep-alive',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            },
+            'maxRedirects': 20
         }
-        let opt = Object.assign(parsedURL,options);
+        log(options)
         if(url.startsWith("https")) {
-            https.request(opt,res=>{
+            https.request(options,(res)=>{
                 res.on('data',function(data){
                     log(data);
-                    tmp += data;
+                    chunks.push(data);
                 });
                 res.on('end', function() {
-                    log(tmp);
-                    writeFile(TS_PATH+filename+'.m3u8',tmp);
+                    writeFile(TS_PATH+filename+'.m3u8',Buffer.concat(chunks));
                     // var s = url.lastIndexOf('\/');
                     // var url1 = mid(url,0,s);
                     // writeFile('tsList.txt');
