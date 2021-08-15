@@ -1,7 +1,9 @@
-const { http, https } = require('follow-redirects');
+const http = require('http')
 const ffmpeg = require('fluent-ffmpeg');
 const exec = require('child_process').exec;
 const fs = require("fs");
+const axios = require('axios');
+const { resolve } = require('path');
 const PORT = 11000;
 const HTTP_OK = 200;
 const BASE_PATH = "/home/ffmpeg/"
@@ -13,117 +15,101 @@ const DOWNLOAD_PROGRESS_APPENDIX = ".down"
 const OWNR_WWW_ID = 1000
 const GRP_WWW_ID = 1000
  
-createDirIfNotExists(BASE_PATH);
-createDirIfNotExists(VIDEO_PATH);
-createDirIfNotExists(TS_PATH);
-http.createServer(function(req,res) {
-    log("============"+new Date()+"============")
-    res.writeHead(HTTP_OK,{
-        'Content-Type':'text/html;charset=utf-8',//解决中文乱码
-        'Access-Content-Allow-Origin':'*'//解决跨域
-    });
-    // log(req.headers)
+function init() {
+    createDirIfNotExists(BASE_PATH);
+    createDirIfNotExists(VIDEO_PATH);
+    createDirIfNotExists(TS_PATH);
+    startServer(PORT);
+}
+init();
 
-    //### 临时处理
-    // if(req.headers)
-
-
-    //###
-    // log("referer:"+req.headers.referer)
-    // log("url="+req.url)
-    // if(!req.headers.referer) {//过滤重复请求
-    //     log("Duplicated request!");
-    //     res.end();
-    //     return;
-    // }
-    if(req.url.indexOf("?")==-1 || req.url.indexOf("url")==-1) {
-        log("No url detected!");
-        res.end("No url detected!");
-        return;
-        // req.url = "/m3u8Downloader?url=https://www.hkg.haokan333.com/201903/07/qM3F7ntN/800kb/hls/index.m3u8";
-    }
-
-    let param = req.url.split("?")[1];
-    let url = param.substr(param.indexOf("=")+1);
-    log("url="+url);
+function startServer(port) {
+    http.createServer(function(req,res) {
+        log("============"+new Date()+"============")
+        res.writeHead(HTTP_OK,{
+            'Content-Type':'text/html;charset=utf-8',//解决中文乱码
+            'Access-Content-Allow-Origin':'*'//解决跨域
+        });
+        //### 临时处理
+        // if(req.headers)
     
+        //###
+        // log("referer:"+req.headers.referer)
+        // log("url="+req.url)
+        // if(!req.headers.referer) {//过滤重复请求
+        //     log("Duplicated request!");
+        //     res.end();
+        //     return;
+        // }
+        if(req.url.indexOf("?")==-1 || req.url.indexOf("url")==-1) {
+            log("No url detected!");
+            res.end("No url detected!");
+            return;
+            // req.url = "/m3u8Downloader?url=https://www.hkg.haokan333.com/201903/07/qM3F7ntN/800kb/hls/index.m3u8";
+        }
+        startDownload(req.url);
+        res.end("我好了");
+    }).listen(port);
+    log('Server start at port '+port);
+}
+
+function startDownload(url) {
     let filename = new Date().getTime();
-    createLogFile(filename);
-    // log(req);
-
-    //多线程下载
-    downloadM3U8(url,filename).then((resolve,reject) => {
-        //m3u8tomp4(path,filename,res);
-    }).catch(error => {
-        log(error);
-    })
-
-    // m3u8tomp4(url,filename,res);
-    //生成缩略图
+    let m3u8File = TS_PATH+filename+'.m3u8';
+    let progFile = createProgressFile(filename);
+    let url = getUrl(req.url);//TODO 需要获取baseUrl
     
-    res.end("我好了");
-}).listen(PORT);
-log('Server start at port '+PORT);
-
-function downloadM3U8(url,filename) {
-    return new Promise((resolve,reject) => {
-        let chunks = [];//存储ts列表
-        console.log("======url=====",url)
-        let parsedUrl = new URL(url);
-        let options = {
-            'hostname': parsedUrl.hostname,
-            'path': parsedUrl.pathname,
-            'method': 'GET',
-            'headers': {
-                'Accept': '*/*',
-                'Host' : 'www.justforstudy.site',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Connection':'keep-alive',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            },
-            'maxRedirects': 20
-        }
-        log(options)
-        if(url.startsWith("https")) {
-            https.request(options,(res)=>{
-                res.on('data',function(data){
-                    log(data);
-                    chunks.push(data);
-                });
-                res.on('end', function() {
-                    writeFile(TS_PATH+filename+'.m3u8',Buffer.concat(chunks));
-                    // var s = url.lastIndexOf('\/');
-                    // var url1 = mid(url,0,s);
-                    // writeFile('tsList.txt');
-                    // textHandle('tsList.txt',url1+'\/',tmp);
-                    resolve();
-                });
-            }).on("error",err=>{
-                log(err);
+    //多线程下载
+    downloadM3U8(url,m3u8File)
+    .then(() => {
+        Promise.all(downloadTsVideos(m3u8File,progFile)).then(results => {
+                //results.data
+                m3u8tomp4(tsFiles,filename,res)
             })
-            // resolve(["1.ts","2.ts"]);
-        } else if(url.startsWith("http")) {
-            http.request(options,res=>{
-                res.on('data',function(data){
-                    log(data);
-                    tmp += data;
-                });
-                res.on('end', function() {
-                    writeFile(filename+'.m3u8',tmp);
-                    // var s = url.lastIndexOf('\/');
-                    // var url1 = mid(url,0,s);
-                    // writeFile('tsList.txt');
-                    // textHandle('tsList.txt',url1+'\/',tmp);
-                    resolve();
-                });
-            }).on("error",err=>{
-                log(err);
-            })
-        }
-        else
-            // throw new Error('Something failed');
-            reject("wrong http protocol!");
     });
+    //生成缩略图
+}
+
+function getUrl(url) {
+    let param = url.split("?")[1];
+    let realUrl = param.substr(param.indexOf("=")+1)
+    log("url="+realUrl);
+    return realUrl;
+}
+
+function downloadM3U8(url,file) {
+    return axios.get(url)
+            .then(res=>{
+                writeFile(file,res.data);
+            }).catch(err=>{
+                log(err);
+            })
+}
+
+function downloadTsVideos(m3u8File,progFile) {
+    let promises = [];
+    // TOTAL_THREADS;
+    let rs = fs.createReadStream(m3u8File);
+    let baseUrl = "";
+    rs.on("data",(data)=>{
+        //TODO 每次读取一行
+
+        //拼接成URL下载
+
+        //统一下载到ts中的单独目录下
+        
+        //根据下载的数量作为进度写入文件(数据库),需要同步写
+
+        //合并成mp4(or 其他)
+
+
+        let p = axios.get();//下载ts
+        promises.push(p);
+    }).on("end",()=>{
+        // return promises;
+    });
+    //怎么等所有的promises创建完毕才返回?文件流本身就是同步??
+    return promises;
 }
 
 function m3u8tomp4(path,filename,res) {
@@ -171,10 +157,11 @@ function log(msg, filename=SERVER_LOG) {
     execCmd(cmd);
 }
 
-function createLogFile(filename) {
+function createProgressFile(filename) {
     let file = VIDEO_PATH+filename+DOWNLOAD_PROGRESS_APPENDIX;
     let cmd = "touch "+file+";chown "+OWNR_WWW_ID+":"+GRP_WWW_ID+" "+file;//修改为docker外部的www用户权限
     execCmd(cmd);
+    return file;
 }
 
 function createDir(dirpath) {
@@ -185,12 +172,13 @@ function createDir(dirpath) {
 }
 
 function writeFile(filename,content="") {
-    fs.appendFile(filename,content,(err) => {
-        if(err) log(err);
-        else fs.chown(filename,OWNR_WWW_ID,GRP_WWW_ID,err=>{
+    fs.promises
+    .appendFile(filename,content)
+    .then(() => {
+        fs.chown(filename,OWNR_WWW_ID,GRP_WWW_ID,err=>{
             if(err) log(err)
         })
-    })
+    }).catch(err=>{log(err)});
 }
 
 function execCmd(cmd) {
