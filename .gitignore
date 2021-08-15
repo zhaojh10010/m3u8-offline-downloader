@@ -6,3 +6,4 @@ node_modules/
 video/
 *.tslist
 *.ts
+*.m3u8
