@@ -77,8 +77,6 @@ function downloadM3U8(url,filename) {
                 });
             })
 
-
-
             resolve(["1.ts","2.ts"]);
         }
         else
