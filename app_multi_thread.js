@@ -12,7 +12,7 @@ const TOTAL_THREADS = 50;
 const DOWNLOAD_PROGRESS_APPENDIX = ".down"
 const OWNR_WWW_ID = 1000
 const GRP_WWW_ID = 1000
-
+ 
 
 
 http.createServer(function(req,res) {
@@ -56,8 +56,8 @@ http.createServer(function(req,res) {
     //生成缩略图
     
     // res.end();
-}).listen(port);
-log('Server start at port '+port);
+}).listen(PORT);
+log('Server start at port '+PORT);
 
 function downloadM3U8(url,filename) {
     return new Promise((resolve,reject) => {
