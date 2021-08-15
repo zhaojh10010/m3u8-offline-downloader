@@ -1,4 +1,5 @@
-t http = require("http");
+http = require("http");
+https = require("https");
 const ffmpeg = require('fluent-ffmpeg');
 const exec = require('child_process').exec;
 const fs = require("fs");
@@ -22,15 +23,22 @@ http.createServer(function(req,res) {
         'Content-Type':'text/html;charset=utf-8',//解决中文乱码
         'Access-Content-Allow-Origin':'*'//解决跨域
     });
+    log(req.headers)
+
+    //### 临时处理
+    if(req.headers)
+
+
+    //###
     // log("referer:"+req.headers.referer)
     // log("url="+req.url)
-    if(!req.headers.referer) {//过滤重复请求
-        log("Duplicated request!")
-        res.end();
-        return;
-    }
+    // if(!req.headers.referer) {//过滤重复请求
+    //     log("Duplicated request!");
+    //     res.end();
+    //     return;
+    // }
     if(req.url.indexOf("?")==-1 || req.url.indexOf("url")==-1) {
-        log("No url detected!")
+        log("No url detected!");
         res.end("No url detected!");
         return;
         // req.url = "/m3u8Downloader?url=https://www.hkg.haokan333.com/201903/07/qM3F7ntN/800kb/hls/index.m3u8";
@@ -38,11 +46,11 @@ http.createServer(function(req,res) {
 
     let param = req.url.split("?")[1];
     let url = param.substr(param.indexOf("=")+1);
-    log(url)
+    log("url="+url);
     
     let filename = new Date().getTime();
     createLogFile(filename);
-    // log(req)
+    // log(req);
 
     //多线程下载
     downloadM3U8(url,filename).then((resolve,reject) => {
@@ -54,15 +62,51 @@ http.createServer(function(req,res) {
     // m3u8tomp4(url,filename,res);
     //生成缩略图
     
-    // res.end();
+    res.end("我好了");
 }).listen(PORT);
 log('Server start at port '+PORT);
 
 function downloadM3U8(url,filename) {
     return new Promise((resolve,reject) => {
         let tmp = '';//存储ts列表
-        if(url) {
-            http.request(url,res=>{
+        let parsedURL = new URL(url);
+        let options = {
+            // url: url,
+            // hostname: 'www.hkg.haokan333.com',
+            // port: 443,
+            // path: '/201903/07/qM3F7ntN/800kb/hls',
+            method: 'get',
+            strictSSL: false,
+            // timeout: 1500,
+            headers: {
+                'Content-Type':'application/x-www-form-urlencoded',
+                'DNT': 1,
+                'Upgrade-Insecure-Requests': 1,
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        }
+        let opt = Object.assign(parsedURL,options);
+        if(url.startsWith("https")) {
+            https.request(opt,res=>{
+                res.on('data',function(data){
+                    log(data);
+                    tmp += data;
+                });
+                res.on('end', function() {
+                    log(tmp);
+                    writeFile(TS_PATH+filename+'.m3u8',tmp);
+                    // var s = url.lastIndexOf('\/');
+                    // var url1 = mid(url,0,s);
+                    // writeFile('tsList.txt');
+                    // textHandle('tsList.txt',url1+'\/',tmp);
+                    resolve();
+                });
+            }).on("error",err=>{
+                log(err);
+            })
+            // resolve(["1.ts","2.ts"]);
+        } else if(url.startsWith("http")) {
+            http.request(options,res=>{
                 res.on('data',function(data){
                     log(data);
                     tmp += data;
@@ -73,14 +117,15 @@ function downloadM3U8(url,filename) {
                     // var url1 = mid(url,0,s);
                     // writeFile('tsList.txt');
                     // textHandle('tsList.txt',url1+'\/',tmp);
+                    resolve();
                 });
+            }).on("error",err=>{
+                log(err);
             })
-
-            resolve(["1.ts","2.ts"]);
         }
         else
             // throw new Error('Something failed');
-            reject("wrong url!");
+            reject("wrong http protocol!");
     });
 }
 
