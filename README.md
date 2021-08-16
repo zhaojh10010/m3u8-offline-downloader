@@ -8,15 +8,14 @@ docker pull jrottenberg/ffmpeg
 ```
 This docker image is based on Ubuntu 16.
 
-You can use 
+You can use the following command to run a docker container named `myffmpeg`.
 ```
 docker run -it --name myffmpeg -p 8088:8088 --entrypoint='bash' jrottenberg/ffmpeg
 ```
-to run a docker container named `myffmpeg`, and after you ran this command, you could simply use
+And after you ran previous command, you could simply use
 ```
 docker run myffmpeg
 ```
-to run the container.
 
 After you sovled the environment, just run
 ```
@@ -28,5 +27,5 @@ and the project should be running.
 ### Other information
 - Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
 - Everything is defined in app.js, just read and modify it.
-- The default port is 8088, the server log file is `server.log`
-- This project offers two shell scripts to start (in background) or stop nodejs server
+- The default port is `8088`, the server log file is `server.log`.
+- This project offers two shell scripts to start (in background) or stop nodejs server.
