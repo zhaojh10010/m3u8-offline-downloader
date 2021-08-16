@@ -15,6 +15,7 @@ const TOTAL_THREADS = 50;
 const DOWNLOAD_PROGRESS_APPENDIX = ".progress"
 const OWNR_WWW_ID = 1000
 const GRP_WWW_ID = 1000
+const THREAD_MONITOR = {};
  
 function init() {
     createDirIfNotExists(BASE_PATH);
@@ -103,6 +104,7 @@ function startDownload(requestPath) {
     let m3u8File = tsDir+'/'+fileName+'.m3u8';
     let progFile = createProgressFile(fileName);
     let url = getUrl(requestPath);
+    THREAD_MONITOR[fileName] = TOTAL_THREADS;
     createDirIfNotExists(tsDir);//创建存放ts的文件夹
     //多线程下载
     downloadM3U8(url.realUrl,m3u8File)
@@ -137,7 +139,7 @@ function downloadM3U8(url,file) {
 
 }
 
-function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
+async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
     log("=================start downloading "+fileName+".m3u8=============");
     return new Promise((resolve,reject) => {
         let tsUrls = [];
@@ -146,19 +148,41 @@ function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
         //有任何一个出错就集体取消
         const CancelToken = axios.CancelToken;
         const source = CancelToken.source();
-        let writeCancel = false;
+        let isCancel = false;
         let lineReader = readline.createInterface(rs);
 
-        // let total = TOTAL_THREADS;
+        let m38uVersion = 3;
+        // let idleThreads = TOTAL_THREADS;
+
+        let range = {};
         //按行读取m3u8文件
         lineReader.on('line',line => {
+            //EXT-X-KEY EXT-X-MAP
+            if(line.indexOf('EXT-X-BYTERANGE')!=-1) {
+                let byteRange = line.split(':')[1];
+                range.len = byteRange.split('@')[0];
+                range.start = byteRange.split('@')[1];
+                m38uVersion = 4;
+            }
             if(line.endsWith('.ts')) {
-                tsUrls.push(line);
+                if(m38uVersion==4)
+                    tsUrls.push(line+'?start='+range.start+'&end='+(range.len+range.start));
+                else
+                    tsUrls.push(line);
+            }
+            if(line.indexOf('#EXT-X-ENDLIST')!=-1) {
+                lineReader.close();
             }
         }).on('close',()=>{
             let total = tsUrls.length;
             let progress=0;
-            tsUrls.forEach((url,index) => {
+            tsUrls.every((url,index) => {
+                if(THREAD_MONITOR[fileName]==0) {
+                    //TODO 等待从数组中获取值
+                    await waitForThreads(fileName,isCancel);
+                }
+                if(isCancel) return false;
+                THREAD_MONITOR[fileName]--;
                 let target = url;
                 if(!url.startsWith('http') && !url.startsWith('www'))
                     target = baseUrl+url;
@@ -167,6 +191,7 @@ function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                     responseType: 'stream'
                 });//下载ts
                 p.then(res => {
+                    THREAD_MONITOR[fileName]++;
                     // let writer = fs.createWriteStream(tsDir+'/'+index+'_'+url);
                     let writer = fs.createWriteStream(tsDir+'/'+url);
                     res.data.pipe(writer);
@@ -185,18 +210,20 @@ function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                     });
                 }).catch(err => {
                     if(!axios.isCancel(err)) {
+                        isCancel = true;
                         source.cancel();
-                        // writeCancel = true;
+                        // isCancel = true;
                         reject();
                         //出错后删除所有ts文件和down文件
                         recrusiveDelete(tsDir);
                         recrusiveDelete(progFile);
+                        THREAD_MONITOR[fileName]=0;
                     }
                 });
+                return true;
             });
         }).on('error',err => {
             log(err);
-            lineReader.close();
         });
     });
 }
@@ -229,6 +256,17 @@ function m3u8tomp4(path,fileName) {
         // .outputOptions("-bsf:a aac_adtstoasc")//将视频转换为mp4
         .output(VIDEO_PATH+fileName+".mp4")
         .run();
+    });
+}
+
+function waitForThreads(fileName,isCancel) {
+    return new Promise((resolve)=>{
+        let timer = setInterval(()=>{
+            if(THREAD_MONITOR[fileName]>0 || isCancel) {
+                resolve();
+                clearInterval(timer);
+            }
+        },1000);
     });
 }
 
