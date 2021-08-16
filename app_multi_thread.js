@@ -2,18 +2,17 @@ const http = require('http')
 const ffmpeg = require('fluent-ffmpeg');
 const exec = require('child_process').exec;
 const fs = require('fs');
-const path = require('path');
 const axios = require('axios');
-const rax = require('retry-axios');
 const readline = require('readline');
-const PORT = 11000;
+
+const PORT = 8088;
 const HTTP_OK = 200;
 const BASE_PATH = "/home/ffmpeg/"
 const VIDEO_PATH = BASE_PATH+"video/"
 const TS_PATH = BASE_PATH+"ts/"
 const SERVER_LOG = "server-dev.log"
 const TOTAL_THREADS = 50;
-const DOWNLOAD_PROGRESS_APPENDIX = ".down"
+const DOWNLOAD_PROGRESS_APPENDIX = ".progress"
 const OWNR_WWW_ID = 1000
 const GRP_WWW_ID = 1000
  
@@ -90,10 +89,10 @@ function startServer(port) {
         }
         startDownload(req.url);
 
-        // m3u8tomp4(TS_PATH+'1629120797920'+"1629120797920.m3u8",'1629120797920');
+        // m3u8tomp4(TS_PATH+'1629126099644'+"/1629126099644.m3u8",'1629126099644');
 
 
-        res.end("我好了");
+        res.end();
     }).listen(port);
     log('Server start at port '+port);
 }
@@ -110,9 +109,7 @@ function startDownload(requestPath) {
     .then(() => {
         downloadTsVideos(url.baseUrl,fileName,m3u8File,progFile)
         .then(() => {
-            console.log("========res=======",tsDir);
-            //TODO 合并成mp4(or 其他)
-            m3u8tomp4(m3u8File);
+            m3u8tomp4(m3u8File,fileName);
         });
     });
     //生成缩略图
@@ -141,7 +138,7 @@ function downloadM3U8(url,file) {
 }
 
 function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
-    log("=================start downloading"+m3u8File+"=============");
+    log("=================start downloading "+fileName+".m3u8=============");
     return new Promise((resolve,reject) => {
         let tsUrls = [];
         let tsDir = TS_PATH+fileName;
@@ -166,12 +163,13 @@ function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                 if(!url.startsWith('http') && !url.startsWith('www'))
                     target = baseUrl+url;
                 let p = axios.get(target,{
-                    cancelToken: source.token
+                    cancelToken: source.token,
+                    responseType: 'stream'
                 });//下载ts
                 p.then(res => {
                     // let writer = fs.createWriteStream(tsDir+'/'+index+'_'+url);
                     let writer = fs.createWriteStream(tsDir+'/'+url);
-                    writer.write(res.data);
+                    res.data.pipe(writer);
                     writer.on('close',() => {
                         try {
                             progress+=1;
@@ -185,15 +183,14 @@ function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                             resolve();
                         }
                     });
-                    writer.end();
                 }).catch(err => {
                     if(!axios.isCancel(err)) {
                         source.cancel();
                         // writeCancel = true;
                         reject();
                         //出错后删除所有ts文件和down文件
-                        recrusiveUnlink(tsDir);
-                        recrusiveUnlink(progFile);
+                        recrusiveDelete(tsDir);
+                        recrusiveDelete(progFile);
                     }
                 });
             });
@@ -205,26 +202,34 @@ function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
 }
 
 function m3u8tomp4(path,fileName) {
-    ffmpeg(path)
-    .on("start",function(commandLine){
-        log("exec "+commandLine);
-        // res.end(JSON.stringify({fileName:fileName+DOWNLOAD_PROGRESS_APPENDIX}));//防阻塞
-    }).on("error",error => {
-        log(error)
-        // let cmd = "rm -rf "+path+".mp4";//出错后删除未下载完毕的视频文件
-        // execCmd(cmd);
-        // throw new Error(error);//会被外部的Promise catch到
-    }).on("progress",function(progress) {
-        // if(progress && progress.percent)
-        //     writeProgress((i++)+"-"+(progress.percent).toFixed(2)+"%",fileName);
-    }).on("end",()=>{
-        // writeProgress(i+"-100.00%",fileName);
-        let cmd = "chown -R 1000:1000 "+VIDEO_PATH;//修改为docker外部的www用户权限
-        execCmd(cmd);
-    }).outputOptions("-c copy")//合并m3u8视频
-    // .outputOptions("-bsf:a aac_adtstoasc")//将视频转换为mp4
-    .output(VIDEO_PATH+fileName+".mp4")
-    .run();
+    return new Promise((resolve,reject) => {
+        let startTime = new Date();
+        ffmpeg(path)
+        .on("start",function(commandLine){
+            log("exec "+commandLine);
+        }).on("error",error => {
+            log(error)
+            // let cmd = "rm -rf "+path+".mp4";//出错后删除未下载完毕的视频文件
+            // execCmd(cmd);
+            // throw new Error(error);//会被外部的Promise catch到
+        }).on("progress",function(progress) {
+            // if(progress && progress.percent)
+            //     writeProgress((i++)+"-"+(progress.percent).toFixed(2)+"%",fileName);
+        }).on("end",()=>{
+            // writeProgress(i+"-100.00%",fileName);
+            log("Finish converting "+fileName+".mp4");
+            let cmd = "chown -R 1000:1000 "+VIDEO_PATH;//修改为docker外部的www用户权限
+            execCmd(cmd);
+            //删除ts文件
+            cmd = "rm -rf "+TS_PATH+fileName;
+            execCmd(cmd);
+            resolve();
+            log("Convertion uses "+(new Date()-startTime)+"ms");
+        }).outputOptions("-c copy")//合并m3u8视频
+        // .outputOptions("-bsf:a aac_adtstoasc")//将视频转换为mp4
+        .output(VIDEO_PATH+fileName+".mp4")
+        .run();
+    });
 }
 
 function createDirIfNotExists(dirpath) {
@@ -272,15 +277,15 @@ function writeFile(fileName,content="") {
     }).catch(err=>{log(err)});
 }
 
-function recrusiveUnlink(fileName) {
-    try {
+function recrusiveDelete(fileName) {
+    /*try {
         if (fs.statSync(fileName).isDirectory()) {
             //读取要删除的目录，获取目录下的文件信息
             let files = fs.readdirSync(fileName);
             //循环遍历要删除的文件
             files.forEach(file => {
                 //如果是目录，继续遍历(递归遍历)
-                recrusiveUnlink(file);
+                recrusiveDelete(file);
             });
             fs.rmdirSync(fileName);//删除本目录
         } else {
@@ -289,7 +294,9 @@ function recrusiveUnlink(fileName) {
         }
     } catch (err) {
         //捕获文件夹不存在的问题
-    }
+    }*/
+    let cmd = "rm -rf "+fileName;
+    execCmd(cmd);
 }
 
 function execCmd(cmd) {

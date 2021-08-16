@@ -7,3 +7,4 @@ video/
 *.tslist
 *.ts
 *.m3u8
+*.progress
