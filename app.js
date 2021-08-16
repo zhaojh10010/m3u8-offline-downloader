@@ -5,8 +5,6 @@ const fs = require('fs');
 
 const PORT = 8088;
 const HTTP_OK = 200;
-const SYMBOL_OVERWRITE = ">";
-const SYMBOL_APPEND = ">>";
 const BASE_PATH = "/home/ffmpeg/"
 const VIDEO_PATH = BASE_PATH+"video/"
 const SERVER_LOG = "server.log"
