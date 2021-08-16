@@ -15,6 +15,7 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^0.21.1",
-    "fluent-ffmpeg": "^2.1.2"
+    "fluent-ffmpeg": "^2.1.2",
+    "retry-axios": "^2.5.0"
   }
 }
