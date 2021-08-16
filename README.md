@@ -26,6 +26,6 @@ node app.js
 and the project should be running.
 ### Other information
 - Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
-- Everything is defined in app.js, just read and modify it.
+- Everything is defined in `app.js`, just read and modify it.
 - The default port is `8088`, the server log file is `server.log`.
 - This project offers two shell scripts to start (in background) or stop nodejs server.
