@@ -183,11 +183,9 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                 }
                 if(isCancel) return false;
                 THREAD_MONITOR[fileName]--;
-                let target = baseUrl+url;
-                let tsFileName = url;
-                if(url.startsWith('http') || !url.startsWith('www')) {
-                    target = url;
-                    tsFileName = url.substr(url.lastIndexOf("/")-1);
+                let target = url;
+                if(!url.startsWith('http') && !url.startsWith('www')) {
+                    target = baseUrl+url;
                 }
                 let p = axios.get(target,{
                     cancelToken: source.token,
@@ -196,7 +194,7 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                 p.then(res => {
                     THREAD_MONITOR[fileName]++;
                     // let writer = fs.createWriteStream(tsDir+'/'+index+'_'+url);
-                    let writer = fs.createWriteStream(tsDir+'/'+tsFileName);
+                    let writer = fs.createWriteStream(tsDir+'/'+url);
                     res.data.pipe(writer);
                     writer.on('close',() => {
                         try {
