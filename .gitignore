@@ -2,7 +2,6 @@
 .user*
 *.log
 node_modules/
-.gitignore
 video/
 *.tslist
 *.ts
