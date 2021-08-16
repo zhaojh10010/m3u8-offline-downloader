@@ -178,14 +178,17 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
             let progress=0;
             tsUrls.every((url,index) => {
                 if(THREAD_MONITOR[fileName]==0) {
-                    //TODO 等待从数组中获取值
+                    //等待从数组中获取值
                     await waitForThreads(fileName,isCancel);
                 }
                 if(isCancel) return false;
                 THREAD_MONITOR[fileName]--;
-                let target = url;
-                if(!url.startsWith('http') && !url.startsWith('www'))
-                    target = baseUrl+url;
+                let target = baseUrl+url;
+                let tsFileName = url;
+                if(url.startsWith('http') || !url.startsWith('www')) {
+                    target = url;
+                    tsFileName = url.substr(url.lastIndexOf("/")-1);
+                }
                 let p = axios.get(target,{
                     cancelToken: source.token,
                     responseType: 'stream'
@@ -193,7 +196,7 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                 p.then(res => {
                     THREAD_MONITOR[fileName]++;
                     // let writer = fs.createWriteStream(tsDir+'/'+index+'_'+url);
-                    let writer = fs.createWriteStream(tsDir+'/'+url);
+                    let writer = fs.createWriteStream(tsDir+'/'+tsFileName);
                     res.data.pipe(writer);
                     writer.on('close',() => {
                         try {
