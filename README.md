@@ -22,8 +22,15 @@ After you sovled the environment, just run
 npm start
 or
 node app.js
+or
+sh start.sh
+or
+./start.sh
 ```
 and the project should be running.
+
+Use `./stop.sh` to stop the server whenever you want.
+
 ### Other information
 - Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
 - Everything is defined in `app.js`, just read and modify it.
