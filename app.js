@@ -5,6 +5,8 @@ const fs = require('fs');
 
 const PORT = 8088;
 const HTTP_OK = 200;
+const SYMBOL_OVERWRITE = ">";
+const SYMBOL_APPEND = ">>";
 const BASE_PATH = "/home/ffmpeg/"
 const VIDEO_PATH = BASE_PATH+"video/"
 const SERVER_LOG = "server.log"
@@ -98,7 +100,7 @@ function writeProgress(msg,fileName) {
 
 function log(msg, fileName=SERVER_LOG) {
     let cmd = "echo \'"+msg+"\' >> "+BASE_PATH+fileName+";chown "+OWNR_WWW_ID+":"+GRP_WWW_ID+" "+BASE_PATH+fileName;
-    console.log(msg);
+    // console.log(msg);
     execCmd(cmd);
 }
 
