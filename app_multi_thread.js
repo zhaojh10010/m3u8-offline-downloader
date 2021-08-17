@@ -16,6 +16,7 @@ const DOWNLOAD_PROGRESS_APPENDIX = ".progress"
 const OWNR_WWW_ID = 1000
 const GRP_WWW_ID = 1000
 const THREAD_MONITOR = {};
+const M3U8_MERGE_FILE = "index.m3u8";
  
 function init() {
     createDirIfNotExists(BASE_PATH);
@@ -102,6 +103,7 @@ function startDownload(requestPath) {
     let fileName = new Date().getTime();
     let tsDir = TS_PATH+fileName;
     let m3u8File = tsDir+'/'+fileName+'.m3u8';
+    let m3u8MergeFile = tsDir+'/'+M3U8_MERGE_FILE;
     let progFile = createProgressFile(fileName);
     let url = getUrl(requestPath);
     THREAD_MONITOR[fileName] = TOTAL_THREADS;
@@ -109,9 +111,9 @@ function startDownload(requestPath) {
     //多线程下载
     downloadM3U8(url.realUrl,m3u8File)
     .then(() => {
-        downloadTsVideos(url.baseUrl,fileName,m3u8File,progFile)
+        downloadTsVideos(url.baseUrl,fileName,m3u8File,m3u8MergeFile,progFile)
         .then(() => {
-            m3u8tomp4(m3u8File,fileName);
+            m3u8tomp4(m3u8MergeFile,fileName);
         });
     });
     //生成缩略图
@@ -139,19 +141,24 @@ function downloadM3U8(url,file) {
 
 }
 
-async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
+async function downloadTsVideos(baseUrl,fileName,m3u8File,m3u8MergeFile,progFile) {
     log("=================start downloading "+fileName+".m3u8=============");
     return new Promise((resolve,reject) => {
         let tsUrls = [];
         let tsDir = TS_PATH+fileName;
         let rs = fs.createReadStream(m3u8File);
+        let ws = fs.createWriteStream(m3u8MergeFile);
         //有任何一个出错就集体取消
         const CancelToken = axios.CancelToken;
         const source = CancelToken.source();
         let isCancel = false;
-        let lineReader = readline.createInterface(rs);
+        let lineReader = readline.createInterface({
+            input: rs,
+            output: ws
+        });
 
         let m38uVersion = 3;
+        let i=0;//文件索引
         // let idleThreads = TOTAL_THREADS;
 
         let range = {};
@@ -167,6 +174,7 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
             }
             if(line.endsWith('.ts')) {
                 tsUrls.push(line);
+                lineReader.write((i++)+'_'+line);
             }
             if(line.indexOf('#EXT-X-ENDLIST')!=-1) {
                 lineReader.close();
@@ -175,10 +183,10 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
             let total = tsUrls.length;
             let progress=0;
             tsUrls.every((url,index) => {
-                if(THREAD_MONITOR[fileName]==0) {
-                    //等待从数组中获取值
-                    await waitForThreads(fileName,isCancel);
-                }
+                // if(THREAD_MONITOR[fileName]==0) {
+                //     //等待从数组中获取值
+                //     await waitForThreads(fileName,isCancel);
+                // }
                 if(isCancel) return false;
                 THREAD_MONITOR[fileName]--;
                 let target = url;
@@ -189,13 +197,14 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                     cancelToken: source.token,
                     responseType: 'stream',
                     headers: {
-                        'range': Object.keys(range).length === 0?'':range.start+'-'+range.end
-                    }
+                        'range': m38uVersion === 4?'bytes='+range.start+'-'+range.end:''
+                    },
+                    timeout: 60000
                 });//下载ts
                 p.then(res => {
                     THREAD_MONITOR[fileName]++;
-                    // let writer = fs.createWriteStream(tsDir+'/'+index+'_'+url);
-                    let writer = fs.createWriteStream(tsDir+'/'+url);
+                    let writer = fs.createWriteStream(tsDir+'/'+index+'_'+url);
+                    // let writer = fs.createWriteStream(tsDir+'/'+url);
                     res.data.pipe(writer);
                     writer.on('close',() => {
                         try {
@@ -215,11 +224,11 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                         isCancel = true;
                         source.cancel();
                         // isCancel = true;
-                        reject();
                         //出错后删除所有ts文件和down文件
                         recrusiveDelete(tsDir);
                         recrusiveDelete(progFile);
                         THREAD_MONITOR[fileName]=0;
+                        log(err);
                     }
                 });
                 return true;
