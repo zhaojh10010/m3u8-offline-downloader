@@ -160,15 +160,13 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
             //EXT-X-KEY EXT-X-MAP
             if(line.indexOf('EXT-X-BYTERANGE')!=-1) {
                 let byteRange = line.split(':')[1];
-                range.len = byteRange.split('@')[0];
-                range.start = byteRange.split('@')[1];
+                range.len = byteRange.split('@')[0]*1;
+                range.start = byteRange.split('@')[1]*1;
+                range.end = range.start+range.len;
                 m38uVersion = 4;
             }
             if(line.endsWith('.ts')) {
-                if(m38uVersion==4)
-                    tsUrls.push(line+'?start='+range.start+'&end='+(range.len+range.start));
-                else
-                    tsUrls.push(line);
+                tsUrls.push(line);
             }
             if(line.indexOf('#EXT-X-ENDLIST')!=-1) {
                 lineReader.close();
@@ -189,7 +187,10 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,progFile) {
                 }
                 let p = axios.get(target,{
                     cancelToken: source.token,
-                    responseType: 'stream'
+                    responseType: 'stream',
+                    headers: {
+                        'range': Object.keys(range).length === 0?'':range.start+'-'+range.end
+                    }
                 });//下载ts
                 p.then(res => {
                     THREAD_MONITOR[fileName]++;
