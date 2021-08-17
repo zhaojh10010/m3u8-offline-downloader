@@ -53,7 +53,7 @@ http.createServer(function(req,res) {
     m3u8tomp4(url,fileName,res);
     //TODO 生成缩略图
     
-    res.end(JSON.stringify({fileName:fileName+DOWNLOAD_PROGRESS_APPENDIX}));
+    res.end(JSON.stringify({progress:fileName+DOWNLOAD_PROGRESS_APPENDIX}));
 }).listen(PORT);
 log('Server start at PORT '+PORT);
 
