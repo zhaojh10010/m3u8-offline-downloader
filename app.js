@@ -92,14 +92,14 @@ function startServer(port) {
         let fileName = new Date().getTime();
         startDownload(req.url,fileName);
         
-        //https://dustme.top/ffmpeg/video/1628785328492.mp4
         var fileInfo = {progress:fileName+DOWNLOAD_PROGRESS_APPENDIX,url:"ffmpeg/video/"+fileName+".mp4"};
         res.end(JSON.stringify(fileInfo));
         
         //==========测试=========
         /*let temp = '1629188281496'
+        var fileInfo = {progress:temp+DOWNLOAD_PROGRESS_APPENDIX,url:"ffmpeg/video/"+temp+".mp4"};
         m3u8tomp4(TS_PATH+temp+"/test.m3u8",temp);
-        res.end(JSON.stringify({progress:temp+DOWNLOAD_PROGRESS_APPENDIX}));*/
+        res.end(JSON.stringify(fileInfo));*/
         //==========END=========
     }).listen(port);
     log('Server start at port '+port);
