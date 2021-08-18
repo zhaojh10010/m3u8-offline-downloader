@@ -11,11 +11,11 @@ const BASE_PATH = "/home/ffmpeg/"
 const VIDEO_PATH = BASE_PATH+"video/"
 const TS_PATH = BASE_PATH+"ts/"
 const SERVER_LOG = "server-dev.log"
-const TOTAL_THREADS = 50;
+const MAX_REQUESTS = 80;
 const DOWNLOAD_PROGRESS_APPENDIX = ".progress"
 const OWNR_WWW_ID = 1000
 const GRP_WWW_ID = 1000
-const THREAD_MONITOR = {};
+const TASK_MONITOR = {};
 const M3U8_MERGE_FILE = "index.m3u8";
  
 function init() {
@@ -67,22 +67,20 @@ function initAxios() {
 
 function startServer(port) {
     http.createServer(function(req,res) {
+        
         log("============"+new Date()+"============")
         res.writeHead(HTTP_OK,{
             'Content-Type':'text/html;charset=utf-8',//解决中文乱码
             'Access-Content-Allow-Origin':'*'//解决跨域
         });
         //### 临时处理
-        // if(req.headers)
-    
-        //###
         // log("referer:"+req.headers.referer)
-        // log("url="+req.url)
-        // if(!req.headers.referer) {//过滤重复请求
-        //     log("Duplicated request!");
-        //     res.end();
-        //     return;
-        // }
+        log("url="+req.url)
+        if(!req.headers.referer) {//过滤重复请求
+            log("Duplicated request!");
+            res.end();
+            return;
+        }
         if(req.url.indexOf("?")==-1 || req.url.indexOf("url")==-1) {
             log("No url detected!");
             res.end("No url detected!");
@@ -90,10 +88,13 @@ function startServer(port) {
             // req.url = "/m3u8Downloader?url=https://www.hkg.haokan333.com/201903/07/qM3F7ntN/800kb/hls/index.m3u8";
         }
         
-        startDownload(req.url)
-        .then(fileName=>{
-            res.end(JSON.stringify({progress:fileName+DOWNLOAD_PROGRESS_APPENDIX}));
-        });
+        
+        let fileName = new Date().getTime();
+        startDownload(req.url,fileName);
+        
+        //https://dustme.top/ffmpeg/video/1628785328492.mp4
+        var fileInfo = {progress:fileName+DOWNLOAD_PROGRESS_APPENDIX,url:"ffmpeg/video/"+fileName+".mp4"};
+        res.end(JSON.stringify(fileInfo));
         
         //==========测试=========
         /*let temp = '1629188281496'
@@ -104,26 +105,44 @@ function startServer(port) {
     log('Server start at port '+port);
 }
 
-function startDownload(requestPath) {
-    return new Promise((resolve,reject) => {
-        let fileName = new Date().getTime();
-        let tsDir = TS_PATH+fileName;
-        let m3u8File = tsDir+'/'+fileName+'.m3u8';
-        let m3u8MergeFile = tsDir+'/'+M3U8_MERGE_FILE;
-        let progFile = createProgressFile(fileName);
-        let url = getUrl(requestPath);
-        THREAD_MONITOR[fileName] = TOTAL_THREADS;
-        createDirIfNotExists(tsDir);//创建存放ts的文件夹
-        //多线程下载
-        downloadM3U8(url.realUrl,m3u8File)
-        .then(() => {
-            downloadTsVideos(url.baseUrl,fileName,m3u8File,m3u8MergeFile,progFile)
-            .then(() => {
-                m3u8tomp4(m3u8MergeFile,fileName);
-            });
+function startDownload(requestPath,fileName) {
+    let tsDir = TS_PATH+fileName;
+    let m3u8File = tsDir+'/'+fileName+'.m3u8';
+    let m3u8MergeFile = tsDir+'/'+M3U8_MERGE_FILE;
+    let progFile = VIDEO_PATH+fileName+DOWNLOAD_PROGRESS_APPENDIX;
+    let url = getUrl(requestPath);
+    createDirIfNotExists(tsDir);//创建存放ts的文件夹
+    writeFile(m3u8File);
+    writeFile(progFile);
+    TASK_MONITOR[fileName] = {};
+    TASK_MONITOR[fileName].available = MAX_REQUESTS;
+    TASK_MONITOR[fileName].progress = 0;
+    TASK_MONITOR[fileName].retryCount = 0;
+    TASK_MONITOR[fileName].isCancel = false;
+    TASK_MONITOR[fileName].total = 0;
+    TASK_MONITOR[fileName].name = fileName;
+    TASK_MONITOR[fileName].tsDir = tsDir;
+    TASK_MONITOR[fileName].m3u8File = m3u8File;
+    TASK_MONITOR[fileName].m3u8MergeFile = m3u8MergeFile;
+    TASK_MONITOR[fileName].progFile = progFile;
+    TASK_MONITOR[fileName].url = url;
+    TASK_MONITOR[fileName].m38uVersion = 3;
+    TASK_MONITOR[fileName].source = axios.CancelToken.source();
+    
+    //多线程下载
+    downloadM3U8(fileName)
+    .then(next => {
+        let startTime = new Date();
+        downloadTsVideos(fileName)
+        .then(next => {
+            log("Download uses "+parseInt((new Date()-startTime)/1000)+"s");
+            m3u8tomp4(fileName);
+        },stop => {
+            log(stop);
         });
-        resolve(fileName)
-    })
+    },stop => {
+        log(stop);
+    });
 }
 
 function getUrl(url) {
@@ -137,118 +156,55 @@ function getUrl(url) {
     return {baseUrl:parsedUrl.origin+path+"/",realUrl:parsedUrl.href};
 }
 
-function downloadM3U8(url,file) {
-    return axios.get(url)
+function downloadM3U8(fileName) {
+    log("============Request "+TASK_MONITOR[fileName].url.realUrl+"================");
+    return new Promise((resolve,reject) => {
+        axios.get(TASK_MONITOR[fileName].url.realUrl)
             .then(res=>{
-                writeFile(file,res.data);
+                writeFile(TASK_MONITOR[fileName].m3u8File,res.data);
+                resolve();
             }).catch(err=>{
-                log("http err:");
+                log("Http err:");
                 log(err);
+                reject("Download m3u8 failed.");
             });
-
+    });
 }
 
-async function downloadTsVideos(baseUrl,fileName,m3u8File,m3u8MergeFile,progFile) {
-    log("=================start downloading "+fileName+".m3u8=================");
+function downloadTsVideos(fileName) {
+    log("=================Start downloading "+fileName+".m3u8=================");
     return new Promise((resolve,reject) => {
-        let tsUrls = [];
-        let tsDir = TS_PATH+fileName;
-        let rs = fs.createReadStream(m3u8File);
-        //有任何一个出错就集体取消
-        const CancelToken = axios.CancelToken;
-        const source = CancelToken.source();
-        let isCancel = false;
+        let rs = fs.createReadStream(TASK_MONITOR[fileName].m3u8File);
         let lineReader = readline.createInterface(rs);
 
-        let m38uVersion = 3;
         let i=0;//文件索引
-        // let idleThreads = TOTAL_THREADS;
-
-        let range = [];
-        
-        let retryReq = [];
-        
+        let downloadInfos = [];
         //按行读取m3u8文件
         lineReader.on('line',line => {
-            //EXT-X-KEY EXT-X-MAP
-            if(line.indexOf('EXT-X-BYTERANGE')!=-1) {
+            //TODO EXT-X-KEY EXT-X-MAP
+            if(!downloadInfos[i])
+                downloadInfos[i] = {index:i};
+            if(line.indexOf('EXT-X-BYTERANGE') != -1) {
                 let byteRange = line.split(':')[1];
-                var rangeObj = {};
-                rangeObj.len = byteRange.split('@')[0]*1;
-                rangeObj.start = byteRange.split('@')[1]*1;
-                rangeObj.end = rangeObj.start+rangeObj.len;
-                range.push(rangeObj);
-                m38uVersion = 4;
+                var range = {};
+                range.len = byteRange.split('@')[0]*1;
+                range.start = byteRange.split('@')[1]*1;
+                range.end = range.start+range.len;
+                downloadInfos[i].range = range;
+                TASK_MONITOR[fileName].m38uVersion = 4;
             }
             if(line.endsWith('.ts')) {
-                tsUrls.push(line);
-                writeFile(m3u8MergeFile,'file \''+tsDir+'/'+(i++)+'.ts\'\n');
+                downloadInfos[i].url = line;
+                writeFile(TASK_MONITOR[fileName].m3u8MergeFile,'file \''+TASK_MONITOR[fileName].tsDir+'/'+i+'.ts\'\n');
+                i++;
             }
-            // if(line.indexOf('#EXT-X-ENDLIST')!=-1) {
-            //     lineReader.close();
-            // }
-        }).on('close',()=>{
-            let total = tsUrls.length;
-            log('totalUrls:'+total);
-            let progress=0;
-            tsUrls.every((url,index) => {
-                // if(THREAD_MONITOR[fileName]==0) {
-                //     //等待从数组中获取值
-                //     await waitForThreads(fileName,isCancel);
-                // }
-                if(isCancel) return false;
-                THREAD_MONITOR[fileName]--;
-                let target = url;
-                if(!url.startsWith('http') && !url.startsWith('www')) {
-                    target = baseUrl+url;
-                }
-                let p = axios.get(target,{
-                    cancelToken: source.token,
-                    responseType: 'stream',
-                    headers: {
-                        'range': m38uVersion === 4?'bytes='+range[index].start+'-'+range[index].end:''
-                    },
-                    timeout: 180000//超时时间180s
-                });//下载ts
-                p.then(res => {
-                    THREAD_MONITOR[fileName]++;
-                    let writer = fs.createWriteStream(tsDir+'/'+index+'.ts');
-                    // let writer = fs.createWriteStream(tsDir+'/'+url);
-                    res.data.pipe(writer);
-                    writer.on('close',() => {
-                        try {
-                            if(progress==0||progress==parseInt(total/2))
-                                log('Downloading: '+((progress/total)*100).toFixed(2)+'%');
-                            progress+=1;
-                            fs.writeFileSync(progFile,((progress/total)*100).toFixed(2)+'%');
-                        } catch (err) {
-                            log("write error:",err);
-                        }
-                        if(progress==total) {
-                            // 转换成mp4
-                            log('Downloading: 100.00%');
-                            log("=================Download "+fileName+".m3u8 list successfully=================");
-                            resolve();
-                        }
-                    });
-                }).catch(err => {
-                    // retryReq.push({//TODO 重试请求
-                    //     err.config
-                    // })
-                    
-                    if(!axios.isCancel(err)) {
-                        isCancel = true;
-                        source.cancel();
-                        //出错后删除所有ts文件和down文件
-                        recrusiveDelete(tsDir);
-                        recrusiveDelete(progFile);
-                        THREAD_MONITOR[fileName]=0;
-                        log("httperr:");
-                        log(err);
-                    }
-                });
-                return true;
-            });
+            if(line.indexOf('#EXT-X-ENDLIST')!=-1 && !downloadInfos[i].url)
+                downloadInfos.pop();
+        }).on('close',() => {
+            TASK_MONITOR[fileName].total = downloadInfos.length;
+            log('totalUrls:'+TASK_MONITOR[fileName].total);
+            downloadVideo(downloadInfos,fileName,resolve,reject);
+            // log(downloadInfos[downloadInfos.length-1]);
         }).on('error',err => {
             log("reading stream err:");
             log(err);
@@ -256,11 +212,91 @@ async function downloadTsVideos(baseUrl,fileName,m3u8File,m3u8MergeFile,progFile
     });
 }
 
-function m3u8tomp4(m3u8MergeFile,fileName) {
+function downloadVideo(downloadInfos,fileName,pResolve,pReject) {
+    //有任何一个出错就集体取消,但是允许重试3次
+    let retryDownloadInfos = [];
+    
+    let total = downloadInfos.length;
+    downloadInfos.every(async (downloadInfo,index) => {
+        if(TASK_MONITOR[fileName].available==0) {
+            //等待从数组中获取值
+            await waitForThreads(fileName);
+        }
+        if(TASK_MONITOR[fileName].isCancel) return false;
+        TASK_MONITOR[fileName].available--;
+        let target = downloadInfo.url;
+        if(!downloadInfo.url.startsWith('http') && !downloadInfo.url.startsWith('www')) {
+            target = TASK_MONITOR[fileName].url.baseUrl+downloadInfo.url;
+        }
+        let p = axios.get(target,{
+            cancelToken: TASK_MONITOR[fileName].source.token,
+            responseType: 'stream',
+            headers: {
+                'range': TASK_MONITOR[fileName].m38uVersion === 4?'bytes='+downloadInfo.range.start+'-'+downloadInfo.range.end:''
+            },
+            timeout: 180000//超时时间180s
+        });//下载ts
+        p.then(res => {
+            TASK_MONITOR[fileName].available++;
+            let writer = fs.createWriteStream(TASK_MONITOR[fileName].tsDir+'/'+downloadInfo.index+'.ts');
+            // let writer = fs.createWriteStream(tsDir+'/'+url);
+            res.data.pipe(writer);
+            writer.on('close',() => {
+                try {
+                    if(TASK_MONITOR[fileName].progress==0||TASK_MONITOR[fileName].progress==parseInt(TASK_MONITOR[fileName].total/2))
+                        log('Downloading: '+((TASK_MONITOR[fileName].progress/TASK_MONITOR[fileName].total)*100).toFixed(2)+'%');
+                    TASK_MONITOR[fileName].progress++;
+                    fs.writeFileSync(TASK_MONITOR[fileName].progFile,((TASK_MONITOR[fileName].progress/TASK_MONITOR[fileName].total)*100).toFixed(2)+'%');
+                } catch (err) {
+                    log("write progFile error:");
+                    log(err);
+                }
+                if(TASK_MONITOR[fileName].progress==TASK_MONITOR[fileName].total) {
+                    // 转换成mp4
+                    log('Downloading: 100.00%');
+                    log("=================Download "+fileName+".m3u8 list successfully=================");
+                    pResolve();
+                }
+            });
+        }).catch(err => {
+            if((err.code=='ETIMEDOUT' || err.code=='ECONNRESET') && TASK_MONITOR[fileName].retryCount<3) {//重试3次
+                log("Retry time:"+TASK_MONITOR[fileName].retryCount);
+                retryDownloadInfos.push(downloadInfo);
+                if(index==total) {//到最后一个链接才执行
+                    TASK_MONITOR[fileName].retryCount++;
+                    downloadVideo(retryDownloadInfos,fileName,pResolve,pReject);
+                }
+            } else {
+                cancelDownload(fileName);
+                log("Http download err: download "+downloadInfo.url+"failed -> range: bytes="+downloadInfo.range.start+"-"+downloadInfo.range.end);
+                log(err);
+                pReject("Download videos failed, check the errors");
+            }
+            if(err.code=='ECONNABORTED') {//cancel导致
+                
+            }
+        });
+        return true;
+    });
+}
+
+function cancelDownload(fileName) {
+    if(!TASK_MONITOR[fileName].isCancel) {
+        TASK_MONITOR[fileName].isCancel = true;
+        TASK_MONITOR[fileName].source.cancel();
+        TASK_MONITOR[fileName].available=0;
+        //出错后删除所有ts文件和progress文件
+        recrusiveDelete(TASK_MONITOR[fileName].tsDir);
+        recrusiveDelete(TASK_MONITOR[fileName].progFile);
+        TASK_MONITOR[fileName] = undefined;
+    }
+}
+
+function m3u8tomp4(fileName) {
     log("=================Start converting ts into mp4=================");
     return new Promise((resolve,reject) => {
         let startTime = new Date();
-        ffmpeg(m3u8MergeFile)
+        ffmpeg(TASK_MONITOR[fileName].m3u8MergeFile)
         .on("start",function(commandLine){
             log("exec "+commandLine);
             //ffmpeg -f concat -safe 0 -i /home/ffmpeg/ts/1629188281496/test.m3u8 -y -c copy /home/ffmpeg/video/1629188281496.mp4
@@ -276,7 +312,7 @@ function m3u8tomp4(m3u8MergeFile,fileName) {
             let cmd = "chown -R 1000:1000 "+VIDEO_PATH;//修改为docker外部的www用户权限
             execCmd(cmd);
             //删除ts文件
-            cmd = "rm -rf "+TS_PATH+fileName;
+            cmd = "rm -rf "+TASK_MONITOR[fileName].tsDir;
             execCmd(cmd);
             resolve();
             log("Convertion uses "+parseInt((new Date()-startTime)/1000)+"s");
@@ -289,10 +325,10 @@ function m3u8tomp4(m3u8MergeFile,fileName) {
     });
 }
 
-function waitForThreads(fileName,isCancel) {
+function waitForThreads(fileName) {
     return new Promise((resolve)=>{
         let timer = setInterval(()=>{
-            if(THREAD_MONITOR[fileName]>0 || isCancel) {
+            if(TASK_MONITOR[fileName].available > MAX_REQUESTS/2 || TASK_MONITOR[fileName].isCancel) {
                 resolve();
                 clearInterval(timer);
             }
@@ -316,16 +352,10 @@ function writeProgress(msg,fileName) {
 }
 
 function log(msg, fileName=SERVER_LOG) {
-    let cmd = "echo \'"+msg+"\' >> "+BASE_PATH+fileName+";chown "+OWNR_WWW_ID+":"+GRP_WWW_ID+" "+BASE_PATH+fileName;
+    //TODO 怎么把msg用echo写入
+    let cmd = "echo \'"+JSON.stringify(msg).replace(/\"/g,'')+"\' >> "+BASE_PATH+fileName+";chown "+OWNR_WWW_ID+":"+GRP_WWW_ID+" "+BASE_PATH+fileName;
     console.log(msg);
     execCmd(cmd);
-}
-
-function createProgressFile(fileName) {
-    let file = VIDEO_PATH+fileName+DOWNLOAD_PROGRESS_APPENDIX;
-    let cmd = "touch "+file+";chown "+OWNR_WWW_ID+":"+GRP_WWW_ID+" "+file;//修改为docker外部的www用户权限
-    execCmd(cmd);
-    return file;
 }
 
 function createDir(dirpath) {
@@ -336,33 +366,18 @@ function createDir(dirpath) {
 }
 
 function writeFile(fileName,content="") {
-    fs.promises
-    .appendFile(fileName,content)
-    .then(() => {
-        fs.chown(fileName,OWNR_WWW_ID,GRP_WWW_ID,err=>{
-            if(err) log(err)
-        })
-    }).catch(err=>{log(err)});
+    try {
+        fs.appendFileSync(fileName,content)
+    } catch (err) {
+        log(err);
+    }
+    fs.chown(fileName,OWNR_WWW_ID,GRP_WWW_ID,err=>{
+        if(err) log(err)
+    })
+    
 }
 
 function recrusiveDelete(fileName) {
-    /*try {
-        if (fs.statSync(fileName).isDirectory()) {
-            //读取要删除的目录，获取目录下的文件信息
-            let files = fs.readdirSync(fileName);
-            //循环遍历要删除的文件
-            files.forEach(file => {
-                //如果是目录，继续遍历(递归遍历)
-                recrusiveDelete(file);
-            });
-            fs.rmdirSync(fileName);//删除本目录
-        } else {
-            // 如果是文件，直接删除文件
-            fs.unlinkSync(fileName);
-        }
-    } catch (err) {
-        //捕获文件夹不存在的问题
-    }*/
     let cmd = "rm -rf "+fileName;
     execCmd(cmd);
 }
