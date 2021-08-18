@@ -74,8 +74,7 @@ function startServer(port) {
             'Access-Content-Allow-Origin':'*'//解决跨域
         });
         //### 临时处理
-        // log("referer:"+req.headers.referer)
-        log("url="+req.url)
+        log("Requrl: "+req.url);
         if(!req.headers.referer) {//过滤重复请求
             log("Duplicated request!");
             res.end();
@@ -91,7 +90,6 @@ function startServer(port) {
         
         let fileName = new Date().getTime();
         startDownload(req.url,fileName);
-        
         var fileInfo = {progress:fileName+DOWNLOAD_PROGRESS_APPENDIX,url:"ffmpeg/video/"+fileName+".mp4"};
         res.end(JSON.stringify(fileInfo));
         
@@ -146,9 +144,8 @@ function startDownload(requestPath,fileName) {
 }
 
 function getUrl(url) {
-    let param = url.split("?")[1];
+    let param = url.substr(url.indexOf("?")+1);
     let realUrl = param.substr(param.indexOf("=")+1);
-    // log("url="+realUrl);
     //https://www.hkg.haokan333.com/201903/07/qM3F7ntN/800kb/hls/index.m3u8
     let parsedUrl = new URL(realUrl);
     //TODO 解析路径
@@ -193,7 +190,7 @@ function downloadTsVideos(fileName) {
                 downloadInfos[i].range = range;
                 TASK_MONITOR[fileName].m38uVersion = 4;
             }
-            if(line.endsWith('.ts')) {
+            if(line.indexOf('.ts')!=-1) {
                 downloadInfos[i].url = line;
                 writeFile(TASK_MONITOR[fileName].m3u8MergeFile,'file \''+TASK_MONITOR[fileName].tsDir+'/'+i+'.ts\'\n');
                 i++;
