@@ -268,7 +268,7 @@ function downloadVideo(downloadInfos,fileName,pResolve,pReject) {
                 }
             } else {
                 cancelDownload(fileName);
-                log("Http download err: download "+downloadInfo.url+"failed -> range: bytes="+downloadInfo.range.start+"-"+downloadInfo.range.end);
+                log("Http download err: download "+downloadInfo.url+" failed -> range: bytes="+downloadInfo.range.start+"-"+downloadInfo.range.end);
                 log(err);
                 pReject("Download videos failed, check the errors");
             }
