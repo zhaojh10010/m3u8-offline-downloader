@@ -4,19 +4,25 @@ const exec = require('child_process').exec;
 const fs = require('fs');
 const axios = require('axios');
 const readline = require('readline');
+const Console = require('console').Console;
 
 const PORT = 8088;
 const HTTP_OK = 200;
-const BASE_PATH = "/home/ffmpeg/"
-const VIDEO_PATH = BASE_PATH+"video/"
-const TS_PATH = BASE_PATH+"ts/"
-const SERVER_LOG = "server.log"
+const BASE_PATH = "./";
+const VIDEO_PATH = BASE_PATH+"video/";
+const TS_PATH = BASE_PATH+"ts/";
+const SERVER_LOG = "server.log";
 const MAX_REQUESTS = 80;
-const DOWNLOAD_PROGRESS_APPENDIX = ".progress"
-const OWNR_WWW_ID = 1000
-const GRP_WWW_ID = 1000
+const DOWNLOAD_PROGRESS_APPENDIX = ".progress";
+const OWNR_WWW_ID = 1000;
+const GRP_WWW_ID = 1000;
 const TASK_MONITOR = {};
 const M3U8_MERGE_FILE = "index.m3u8";
+const FILE_MODE_APPEND = 0;
+const FILE_MODE_OVERWRITE = 1;
+const output = fs.createWriteStream(BASE_PATH+SERVER_LOG);
+const errOutput = fs.createWriteStream(BASE_PATH+SERVER_LOG);
+const logger = new Console({stdout: output, stderr: errOutput});
 
 init();
 function init() {
@@ -210,7 +216,7 @@ function downloadVideo(downloadInfos,fileName,pResolve,pReject) {
                     if(TASK_MONITOR[fileName].progress==0||TASK_MONITOR[fileName].progress==parseInt(TASK_MONITOR[fileName].total/2))
                         log('Downloading: '+((TASK_MONITOR[fileName].progress/TASK_MONITOR[fileName].total)*100).toFixed(2)+'%');
                     TASK_MONITOR[fileName].progress++;
-                    fs.writeFileSync(TASK_MONITOR[fileName].progFile,((TASK_MONITOR[fileName].progress/TASK_MONITOR[fileName].total)*100).toFixed(2)+'%');
+                    writeProgress(TASK_MONITOR[fileName].progFile,((TASK_MONITOR[fileName].progress/TASK_MONITOR[fileName].total)*100).toFixed(2)+'%');
                 } catch (err) {
                     log("write progFile error:");
                     log(err);
@@ -304,22 +310,19 @@ function createDirIfNotExists(dirpath) {
     try {
         fs.statSync(dirpath);//同步需要try catch,异步才能用回调
     } catch (error) {
-        console.log("Directory "+dirpath+" not exists, automatically created.");
+        log("Directory "+dirpath+" not exists, automatically created.");
         createDir(dirpath);
     }
 }
 
 
-function writeProgress(msg,fileName) {
-    let cmd = "echo \'"+msg+"\' > "+VIDEO_PATH+fileName+DOWNLOAD_PROGRESS_APPENDIX;
-    execCmd(cmd);
+function writeProgress(fileName,progress) {
+    writeFile(fileName,progress,FILE_MODE_OVERWRITE);
 }
 
-function log(msg, fileName=SERVER_LOG) {
-    //TODO 怎么把msg用echo写入
-    let cmd = "echo \'"+JSON.stringify(msg).replace(/\"/g,'')+"\' >> "+BASE_PATH+fileName+";chown "+OWNR_WWW_ID+":"+GRP_WWW_ID+" "+BASE_PATH+fileName;
-    console.log(msg);
-    execCmd(cmd);
+function log(msg) {
+    logger.log(msg);
+    // writeFile(BASE_PATH+SERVER_LOG,JSON.stringify(msg));
 }
 
 function createDir(dirpath) {
@@ -329,9 +332,9 @@ function createDir(dirpath) {
     });
 }
 
-function writeFile(fileName,content="") {
+function writeFile(fileName,content,mode=FILE_MODE_APPEND) {
     try {
-        if(content.length==0)
+        if(mode==FILE_MODE_OVERWRITE)
             fs.writeFileSync(fileName,content);
         else
             fs.appendFileSync(fileName,content);
