@@ -20,8 +20,8 @@ const TASK_MONITOR = {};
 const M3U8_MERGE_FILE = "index.m3u8";
 const FILE_MODE_APPEND = 0;
 const FILE_MODE_OVERWRITE = 1;
-const output = fs.createWriteStream(BASE_PATH+SERVER_LOG);
-const errOutput = fs.createWriteStream(BASE_PATH+SERVER_LOG);
+const output = fs.createWriteStream(BASE_PATH+SERVER_LOG,{flags:'a'});
+const errOutput = fs.createWriteStream(BASE_PATH+SERVER_LOG,{flags:'a'});
 const logger = new Console({stdout: output, stderr: errOutput});
 
 init();
@@ -151,6 +151,11 @@ function downloadTsVideos(fileName) {
         let downloadInfos = [];
         //按行读取m3u8文件
         lineReader.on('line',line => {
+            if(i==0 && !line.startsWith("#")) {//不是m3u8文件
+                log("Not a m3u8File, stop downloading.");
+                cancelDownload(fileName);
+                lineReader.close();
+            }
             //TODO EXT-X-KEY EXT-X-MAP
             if(!downloadInfos[i])
                 downloadInfos[i] = {index:i};
@@ -332,7 +337,7 @@ function createDir(dirpath) {
     });
 }
 
-function writeFile(fileName,content,mode=FILE_MODE_APPEND) {
+function writeFile(fileName,content="",mode=FILE_MODE_APPEND) {
     try {
         if(mode==FILE_MODE_OVERWRITE)
             fs.writeFileSync(fileName,content);
