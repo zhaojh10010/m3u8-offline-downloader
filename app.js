@@ -348,8 +348,7 @@ function writeFile(fileName,content="",mode=FILE_MODE_APPEND) {
     }
     fs.chown(fileName,OWNR_WWW_ID,GRP_WWW_ID,err=>{
         if(err) log(err);
-    })
-    
+    });
 }
 
 function recrusiveDelete(fileName) {
