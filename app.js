@@ -8,7 +8,7 @@ const Console = require('console').Console;
 
 const PORT = 8088;
 const HTTP_OK = 200;
-const BASE_PATH = "./";
+const BASE_PATH = "/home/ffmpeg/";
 const VIDEO_PATH = BASE_PATH+"video/";
 const TS_PATH = BASE_PATH+"ts/";
 const SERVER_LOG = "server.log";
@@ -105,7 +105,7 @@ function startDownload(requestPath,fileName) {
         let startTime = new Date();
         downloadTsVideos(fileName)
         .then(next => {
-            log("Download uses "+parseInt((new Date()-startTime)/1000)+"s");
+            log("Download costs "+parseInt((new Date()-startTime)/1000)+"s");
             m3u8tomp4(fileName);
         },stop => {
             log(stop);
@@ -150,12 +150,14 @@ function downloadTsVideos(fileName) {
         let i=0;//文件索引
         let downloadInfos = [];
         //按行读取m3u8文件
+        let k=0;//行索引
         lineReader.on('line',line => {
-            if(i==0 && !line.startsWith("#")) {//不是m3u8文件
+            if(k==0 && !line.startsWith("#")) {//不是m3u8文件
                 log("Not a m3u8File, stop downloading.");
                 cancelDownload(fileName);
                 lineReader.close();
             }
+            k++;
             //TODO EXT-X-KEY EXT-X-MAP
             if(!downloadInfos[i])
                 downloadInfos[i] = {index:i};
@@ -287,10 +289,10 @@ function m3u8tomp4(fileName) {
             let cmd = "chown -R 1000:1000 "+VIDEO_PATH;//修改为docker外部的www用户权限
             execCmd(cmd);
             //删除ts文件
-            cmd = "rm -rf "+TASK_MONITOR[fileName].tsDir;
-            execCmd(cmd);
+            // cmd = "rm -rf "+TASK_MONITOR[fileName].tsDir;
+            // execCmd(cmd);
             resolve();
-            log("Convertion uses "+parseInt((new Date()-startTime)/1000)+"s");
+            log("Convertion costs "+parseInt((new Date()-startTime)/1000)+"s");
         }).inputOptions("-f concat")
         .inputOptions("-safe 0")
         .outputOptions("-c copy")//合并m3u8视频
