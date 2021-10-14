@@ -1,12 +1,12 @@
 {
   "name": "m3u8downloader",
   "version": "1.0.0",
-  "description": "A simple system to download m3u8 with ffmpeg",
+  "description": "A simple nodejs server to download m3u8 with ffmpeg",
   "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node app.js",
-    "dev": "node app_multi_thread.js"
+    "dev": "node ffmpeg.js"
   },
   "keywords": [
     "m3u8"
