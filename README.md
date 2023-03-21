@@ -1,8 +1,6 @@
 # M3U8 Downloader
 A practice project -> a simple backend for offline m3u8 links downloading using nodejs.
 
-Not a right way to use npm...
-
 ### Installation
 This project needs to install ffmpeg docker image, so firstly you need to install docker and start docker process, and then execute
 ```
