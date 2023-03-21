@@ -2,7 +2,6 @@
 A practice project -> a simple backend for offline m3u8 links downloading using nodejs.
 
 Not a right way to use npm...
-TODO: Need npm run build
 
 ### Installation
 This project needs to install ffmpeg docker image, so firstly you need to install docker and start docker process, and then execute
@@ -13,11 +12,11 @@ This docker image is based on Ubuntu 16.
 
 You can use the following command to run a docker container named `myffmpeg`.
 ```
-docker run -it --name myffmpeg -p 8088:8088 --entrypoint='bash' jrottenberg/ffmpeg
+docker run -itd --name myffmpeg -p 8088:8088 --entrypoint='bash' jrottenberg/ffmpeg
 ```
 And after you ran previous command, you could simply use
 ```
-docker run myffmpeg
+docker start myffmpeg
 ```
 
 After you sovled the environment, just run
