@@ -17,19 +17,38 @@ And after you ran previous command, you could simply use
 docker start myffmpeg
 ```
 
-After you sovled the environment, just run
+After you sovled the environment, you can download this project.
+```
+git clone https://github.com/zhaojh10010/m3u8-offline-downloader.git
+```
+and then install the dependency modules.
+```
+cd m3u8-offline-downloader
+```
+```
+npm install
+```
+when all things are done, just run
 ```
 npm start
+```
+```
 or
+```
+```
 node app.js
+```
 or
+```
 sh start.sh
+```
 or
+```
 ./start.sh
 ```
 and the project should be running.
 
-Use `./stop.sh or sh stop.sh` to stop the server whenever you want.
+Use `./stop.sh` / `sh stop.sh`(if you use `start.sh`) or `Ctrl + C`(use `npm start` / `node app.js`) to stop the server whenever you want.
 
 ### Usage
 use GET request
@@ -39,8 +58,6 @@ http://localhost:8088/download
 {
   url='m3u8url.m3u8'
 }
-#
-http://localhost:8088/download?url=m3u8url.m3u8
 ```
 
 Or directly type in browers
