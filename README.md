@@ -32,10 +32,23 @@ and the project should be running.
 Use `./stop.sh or sh stop.sh` to stop the server whenever you want.
 
 ### Usage
-Just input a url with the param `url` and replace the `m3u8url.m3u8` by your url.
+use GET request
 ```
-https://yourserverdomian:8088/requestpath?url=m3u8url.m3u8
+http://localhost:8088/download
+#params
+{
+  url='m3u8url.m3u8'
+}
+#
+http://localhost:8088/download?url=m3u8url.m3u8
 ```
+
+Or directly type in browers
+```
+http://localhost:8088/download?url=m3u8url.m3u8
+```
+
+remember to replace the param `m3u8url.m3u8` to real download link.
 
 ### Other information
 - Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
