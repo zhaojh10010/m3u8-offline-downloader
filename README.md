@@ -17,18 +17,18 @@ And after you ran previous command, you could simply use
 docker start myffmpeg
 ```
 
-After you sovled the environment, you can download this project.
+After you sovled the environment, you can download this project by
 ```
 git clone https://github.com/zhaojh10010/m3u8-offline-downloader.git
 ```
-and then install the dependency modules.
+and then install the dependency modules
 ```
 cd m3u8-offline-downloader
 ```
 ```
 npm install
 ```
-when all things are done, just run
+when all things done, just run
 ```
 npm start
 ```
@@ -57,13 +57,17 @@ http://localhost:8088/download
   url='m3u8url.m3u8'
 }
 ```
-
 Or directly type in browers
 ```
 http://localhost:8088/download?url=m3u8url.m3u8
 ```
 
-remember to replace the param `m3u8url.m3u8` to real download link.
+for example
+```
+http://localhost:8088/download?url=https://www.hkg.haokan333.com/201903/07/qM3F7ntN/800kb/hls/index.m3u8
+```
+
+remember to replace the param `m3u8url.m3u8` to real m3u8 link.
 
 ### Other information
 - Notify that this project uses `/home/ffmpeg/video` as the video files' log path, you can modify it in `app.js` as you wish.
