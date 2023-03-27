@@ -32,9 +32,7 @@ when all things are done, just run
 ```
 npm start
 ```
-```
 or
-```
 ```
 node app.js
 ```
